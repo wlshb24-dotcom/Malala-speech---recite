@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>馬拉拉演講挑戰評分系統</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .font-serif { font-family: Georgia, Cambria, "Times New Roman", Times, serif; }
+        /* 自訂動畫 */
+        @keyframes fadeInSlideUp {
+            0% { opacity: 0; transform: translateY(20px); }
+            100% { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in-up { animation: fadeInSlideUp 0.5s ease-out forwards; }
+        .hidden-safely { display: none !important; }
+    </style>
+</head>
+<body class="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 p-4 md:p-8">
+
+    <!-- 不支援語音辨識的警告畫面 -->
+    <div id="unsupportedWarning" class="hidden-safely min-h-screen bg-gray-50 flex items-center justify-center p-4 absolute inset-0 z-50">
+        <div class="bg-white p-8 rounded-2xl shadow-xl max-w-md text-center">
+            <i data-lucide="alert-circle" class="w-16 h-16 text-red-500 mx-auto mb-4"></i>
+            <h2 class="text-2xl font-bold text-gray-800 mb-2">瀏覽器不支援</h2>
+            <p class="text-gray-600">您的瀏覽器不支援語音辨識功能。請使用最新版本的 Google Chrome 或 Microsoft Edge 以獲得最佳體驗。</p>
+        </div>
+    </div>
+
+    <div id="mainApp" class="max-w-4xl mx-auto space-y-6 hidden-safely">
+        <!-- Header -->
+        <header class="bg-white rounded-2xl shadow-sm border border-blue-100 p-6 flex flex-col md:flex-row items-center justify-between gap-4">
+            <div>
+                <h1 class="text-3xl font-extrabold text-gray-800 flex items-center gap-3">
+                    <i data-lucide="award" class="text-blue-500 w-8 h-8"></i>
+                    馬拉拉演講挑戰
+                </h1>
+                <p class="text-gray-500 mt-1">帶入情感、大聲朗讀，爭取最佳成績！</p>
+            </div>
+            
+            <div class="flex bg-gray-100 p-1 rounded-xl" id="levelButtonsContainer">
+                <button onclick="setLevel('basic')" id="btn-basic" class="level-btn px-6 py-2 text-sm font-semibold rounded-lg transition-all bg-white text-blue-600 shadow-sm">
+                    基礎版 (Basic)
+                </button>
+                <button onclick="setLevel('challenge')" id="btn-challenge" class="level-btn px-6 py-2 text-sm font-semibold rounded-lg transition-all text-gray-500 hover:text-gray-700">
+                    挑戰版 (Challenge)
+                </button>
+            </div>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-5 gap-6">
+            
+            <!-- Main Content Area -->
+            <div class="lg:col-span-3 space-y-6">
+                <!-- Target Text Card -->
+                <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                    <div class="bg-blue-50 px-6 py-4 border-b border-blue-100 flex justify-between items-center">
+                        <h2 class="font-semibold text-blue-800">演講稿內容</h2>
+                        <div id="targetScoreBadge" class="text-xs font-medium bg-blue-100 text-blue-700 px-2 py-1 rounded-full">
+                            <!-- JS 動態填入達標分數 -->
+                        </div>
+                    </div>
+                    <div class="p-6">
+                        <div id="speechContent" class="text-xl leading-relaxed text-gray-700 font-serif">
+                            <!-- JS 動態填入演講稿或評分結果 -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Controls & Realtime Feedback -->
+                <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+                    <div class="flex flex-col items-center justify-center space-y-6">
+                        <!-- Visualizer Canvas -->
+                        <canvas id="waveformCanvas" width="400" height="80" class="w-full max-w-md bg-gray-100 rounded-lg shadow-inner"></canvas>
+
+                        <!-- Buttons -->
+                        <div class="flex items-center gap-4">
+                            <button id="startBtn" onclick="startRecording()" class="group relative flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-full font-bold shadow-lg shadow-blue-200 transition-all active:scale-95">
+                                <i data-lucide="mic" class="w-6 h-6"></i>
+                                <span>開始演講</span>
+                            </button>
+                            
+                            <button id="stopBtn" onclick="stopRecording()" class="hidden-safely flex items-center gap-2 bg-red-500 hover:bg-red-600 text-white px-8 py-4 rounded-full font-bold shadow-lg shadow-red-200 transition-all active:scale-95 animate-pulse">
+                                <i data-lucide="square" class="w-6 h-6"></i>
+                                <span>停止並評分 (<span id="recordingTimeDisplay">0:00</span>)</span>
+                            </button>
+                            
+                            <button id="retryBtn" onclick="retryLevel()" class="hidden-safely flex items-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 px-6 py-4 rounded-full font-bold transition-all">
+                                <i data-lucide="refresh-cw" class="w-5 h-5"></i>
+                                重試
+                            </button>
+                        </div>
+
+                        <!-- Live Transcript -->
+                        <div id="liveTranscript" class="hidden-safely w-full text-center text-gray-400 italic text-sm bg-gray-50 p-3 rounded-lg border border-gray-100">
+                            "<span id="interimText">正在聆聽中...</span>"
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Results Area -->
+            <div class="lg:col-span-2 relative">
+                
+                <!-- 預設等待畫面 -->
+                <div id="defaultArea" class="bg-indigo-50 rounded-2xl border border-indigo-100 p-8 h-full flex flex-col items-center justify-center text-center text-indigo-800 space-y-4">
+                    <i data-lucide="activity" class="w-16 h-16 opacity-50"></i>
+                    <h3 class="text-xl font-bold">準備好展現自己了嗎？</h3>
+                    <p class="text-sm opacity-80 leading-relaxed">
+                        點擊「開始演講」並對著麥克風朗讀。<br>系統將會即時分析你的<br/>
+                        <strong>發音標準度</strong>、<strong>情感起伏</strong>與<strong>語速</strong>。<br/><br/>
+                        記得：不要只是唸稿，<br/>想像你正站在聯合國的舞台上！
+                    </p>
+                </div>
+
+                <!-- 評分結果畫面 -->
+                <div id="resultsArea" class="hidden-safely bg-white rounded-2xl shadow-lg border-2 border-indigo-100 overflow-hidden animate-fade-in-up h-full">
+                    <div id="resultHeader" class="p-6 text-center text-white bg-gradient-to-br from-indigo-500 to-blue-600">
+                        <h3 id="resultTitle" class="text-lg font-medium opacity-90 mb-1">💪 繼續加油！</h3>
+                        <div class="text-5xl font-black mb-2"><span id="finalGradeText">0</span> <span class="text-xl font-normal opacity-80">分</span></div>
+                        <p class="text-sm opacity-90">您的實際成績 (根據當前難度換算)</p>
+                    </div>
+                    
+                    <div class="p-6 space-y-6">
+                        <div class="space-y-4">
+                            <!-- Overall UI Score -->
+                            <div class="flex justify-between items-end mb-1">
+                                <span class="text-sm font-bold text-gray-700">綜合表現得分</span>
+                                <span class="text-xl font-black text-indigo-600"><span id="totalScoreText">0</span> / 100</span>
+                            </div>
+                            <div class="w-full bg-gray-100 rounded-full h-3 mb-6">
+                                <div id="totalScoreBar" class="bg-indigo-500 h-3 rounded-full transition-all duration-1000" style="width: 0%"></div>
+                            </div>
+                            <div class="border-t border-gray-100 pt-4"></div>
+
+                            <!-- Metric 1: Accuracy -->
+                            <div>
+                                <div class="flex justify-between text-sm mb-1">
+                                    <span class="flex items-center gap-1 text-gray-600"><i data-lucide="check-circle" class="w-4 h-4 text-green-500"></i> 發音準確度 (55%)</span>
+                                    <span class="font-semibold text-gray-800" id="accuracyScoreText">0</span>
+                                </div>
+                                <div class="w-full bg-gray-100 rounded-full h-2">
+                                    <div id="accuracyScoreBar" class="bg-green-500 h-2 rounded-full transition-all duration-1000" style="width: 0%"></div>
+                                </div>
+                                <p class="text-xs text-gray-400 mt-1">要求咬字清晰，不能含糊帶過。</p>
+                            </div>
+                            
+                            <!-- Metric 2: Intonation -->
+                            <div>
+                                <div class="flex justify-between text-sm mb-1">
+                                    <span class="flex items-center gap-1 text-gray-600"><i data-lucide="volume-2" class="w-4 h-4 text-orange-500"></i> 情感抑揚頓挫 (35%)</span>
+                                    <span class="font-semibold text-gray-800" id="intonationScoreText">0</span>
+                                </div>
+                                <div class="w-full bg-gray-100 rounded-full h-2">
+                                    <div id="intonationScoreBar" class="bg-orange-500 h-2 rounded-full transition-all duration-1000" style="width: 0%"></div>
+                                </div>
+                                <p class="text-xs text-gray-400 mt-1">偵測聲音能量變化。避免平鋪直敘，要有輕重音。</p>
+                            </div>
+
+                            <!-- Metric 3: Pacing -->
+                            <div>
+                                <div class="flex justify-between text-sm mb-1">
+                                    <span class="flex items-center gap-1 text-gray-600"><i data-lucide="clock" class="w-4 h-4 text-blue-500"></i> 語速控制 (10%)</span>
+                                    <span class="font-semibold text-gray-800" id="pacingScoreText">0</span>
+                                </div>
+                                <div class="w-full bg-gray-100 rounded-full h-2">
+                                    <div id="pacingScoreBar" class="bg-blue-500 h-2 rounded-full transition-all duration-1000" style="width: 0%"></div>
+                                </div>
+                                <p class="text-xs text-gray-400 mt-1">當前語速: <span id="wpmText">0</span> 字/分鐘 (最佳 110-160)。</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- Application Logic -->
+    <script>
+        // 初始化 Icons
+        lucide.createIcons();
+
+        const SPEECH_TEXTS = {
+            basic: {
+                id: 'basic',
+                title: '基礎版 (Basic)',
+                targetScore: 85,
+                rewardGrade: 85,
+                text: "I hope in another seven years we will speak to you again, but instead of urging you to help us, we will be cheering and celebrating the progress you have made for girls. When you leave this room today, please ask yourselves: how many more generations are you willing to sacrifice? How long will you make us wait for what you have promised? How many more times do we have to stand on this stage to be heard?"
+            },
+            challenge: {
+                id: 'challenge',
+                title: '挑戰版 (Challenge)',
+                targetScore: 85,
+                rewardGrade: 95,
+                text: "You must not make small, stingy and short-term pledges, but commit to uphold the right to complete education and close the funding gap once and for all. You must use the power you have to take action: allocate 20 percent of your budgets to education. High income countries: increase aid, cancel debts and set a fair global tax system so that low-income countries can spend more on girls. Remove gender bias from curricula, improve content and make schools safe for girls, and work together with those who are the closest to the challenges to transform education today."
+            }
+        };
+
+        // 系統狀態
+        let currentLevel = 'basic';
+        let isRecording = false;
+        let transcriptStr = '';
+        let interimTranscriptStr = '';
+        let recordingTime = 0;
+        let volumeHistory = [];
+        
+        // Web API 參考
+        let recognition = null;
+        let audioContext = null;
+        let analyser = null;
+        let microphone = null;
+        let animationFrame = null;
+        let timerInterval = null;
+        let startTime = null;
+
+        // DOM 元素參考
+        const canvas = document.getElementById('waveformCanvas');
+        const canvasCtx = canvas.getContext('2d');
+        const speechContentEl = document.getElementById('speechContent');
+        const targetScoreBadgeEl = document.getElementById('targetScoreBadge');
+        
+        // 初始化檢查與設定
+        window.onload = () => {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SpeechRecognition) {
+                document.getElementById('unsupportedWarning').classList.remove('hidden-safely');
+                return;
+            } else {
+                document.getElementById('mainApp').classList.remove('hidden-safely');
+                setupRecognition(SpeechRecognition);
+                renderTargetText();
+            }
+        };
+
+        function setupRecognition(SpeechRecognition) {
+            recognition = new SpeechRecognition();
+            recognition.continuous = true;
+            recognition.interimResults = true;
+            recognition.lang = 'en-US';
+
+            recognition.onresult = (event) => {
+                let currentFinal = '';
+                let currentInterim = '';
+
+                for (let i = event.resultIndex; i < event.results.length; ++i) {
+                    if (event.results[i].isFinal) {
+                        currentFinal += event.results[i][0].transcript + ' ';
+                    } else {
+                        currentInterim += event.results[i][0].transcript;
+                    }
+                }
+
+                transcriptStr += currentFinal;
+                interimTranscriptStr = currentInterim;
+                
+                document.getElementById('interimText').textContent = interimTranscriptStr || '正在聆聽中...';
+            };
+
+            recognition.onerror = (event) => {
+                console.error('Speech recognition error', event.error);
+                if (event.error === 'not-allowed') {
+                    alert('請允許麥克風權限以進行演講評分。');
+                    stopRecording();
+                }
+            };
+        }
+
+        function setLevel(level) {
+            if (isRecording) return;
+            currentLevel = level;
+            
+            // 更新按鈕樣式
+            document.querySelectorAll('.level-btn').forEach(btn => {
+                btn.className = 'level-btn px-6 py-2 text-sm font-semibold rounded-lg transition-all text-gray-500 hover:text-gray-700';
+            });
+            const activeBtn = document.getElementById(`btn-${level}`);
+            activeBtn.className = 'level-btn px-6 py-2 text-sm font-semibold rounded-lg transition-all bg-white text-blue-600 shadow-sm';
+            
+            retryLevel();
+        }
+
+        function renderTargetText() {
+            const data = SPEECH_TEXTS[currentLevel];
+            targetScoreBadgeEl.textContent = `達標 ${data.targetScore} 分 → 可得 ${data.rewardGrade} 分`;
+            speechContentEl.innerHTML = `<p>${data.text}</p>`;
+        }
+
+        function formatTime(seconds) {
+            const mins = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+            return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+        }
+
+        // 視覺化波形
+        function drawWaveform() {
+            if (!analyser || !canvas) return;
+            
+            const width = canvas.width;
+            const height = canvas.height;
+            const bufferLength = analyser.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
+            analyser.getByteTimeDomainData(dataArray);
+
+            canvasCtx.fillStyle = 'rgb(243, 244, 246)'; 
+            canvasCtx.fillRect(0, 0, width, height);
+
+            canvasCtx.lineWidth = 2;
+            canvasCtx.strokeStyle = 'rgb(59, 130, 246)';
+            canvasCtx.beginPath();
+
+            const sliceWidth = width * 1.0 / bufferLength;
+            let x = 0;
+            let sumSquares = 0;
+
+            for (let i = 0; i < bufferLength; i++) {
+                const v = dataArray[i] / 128.0;
+                const y = v * height / 2;
+                
+                const normalizedValue = (dataArray[i] - 128) / 128;
+                sumSquares += normalizedValue * normalizedValue;
+
+                if (i === 0) canvasCtx.moveTo(x, y);
+                else canvasCtx.lineTo(x, y);
+                
+                x += sliceWidth;
+            }
+
+            canvasCtx.lineTo(canvas.width, canvas.height / 2);
+            canvasCtx.stroke();
+            
+            // 收集音量數據用於評分
+            const rms = Math.sqrt(sumSquares / bufferLength);
+            if (Math.random() < 0.2) {
+                volumeHistory.push(rms);
+            }
+
+            animationFrame = requestAnimationFrame(drawWaveform);
+        }
+
+        async function startRecording() {
+            try {
+                // 重置狀態
+                transcriptStr = '';
+                interimTranscriptStr = '';
+                volumeHistory = [];
+                recordingTime = 0;
+                document.getElementById('recordingTimeDisplay').textContent = '0:00';
+                document.getElementById('interimText').textContent = '正在聆聽中...';
+                
+                // 隱藏結果區，顯示預設區
+                document.getElementById('resultsArea').classList.add('hidden-safely');
+                document.getElementById('defaultArea').classList.remove('hidden-safely');
+                renderTargetText();
+
+                // 設定 Audio Context
+                if (!audioContext) {
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                }
+                if (audioContext.state === 'suspended') {
+                    await audioContext.resume();
+                }
+
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                analyser = audioContext.createAnalyser();
+                analyser.fftSize = 2048;
+                
+                microphone = audioContext.createMediaStreamSource(stream);
+                microphone.connect(analyser);
+
+                // 開始辨識
+                recognition.start();
+                isRecording = true;
+                updateUIButtons();
+                
+                // 計時器
+                startTime = Date.now();
+                timerInterval = setInterval(() => {
+                    recordingTime = Math.floor((Date.now() - startTime) / 1000);
+                    document.getElementById('recordingTimeDisplay').textContent = formatTime(recordingTime);
+                }, 1000);
+
+                drawWaveform();
+
+            } catch (err) {
+                console.error("Error starting recording:", err);
+                alert("無法啟動麥克風，請檢查權限設定。");
+            }
+        }
+
+        function stopRecording() {
+            if (recognition) recognition.stop();
+            if (microphone) microphone.disconnect();
+            if (animationFrame) cancelAnimationFrame(animationFrame);
+            if (timerInterval) clearInterval(timerInterval);
+            
+            isRecording = false;
+            updateUIButtons();
+            
+            // 稍微延遲以確保最後的語音辨識結果已送達
+            setTimeout(() => {
+                evaluatePerformance();
+            }, 500);
+        }
+
+        function retryLevel() {
+            transcriptStr = '';
+            interimTranscriptStr = '';
+            document.getElementById('resultsArea').classList.add('hidden-safely');
+            document.getElementById('defaultArea').classList.remove('hidden-safely');
+            
+            // 確保畫布清空
+            canvasCtx.fillStyle = 'rgb(243, 244, 246)'; 
+            canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            renderTargetText();
+            updateUIButtons();
+        }
+
+        function updateUIButtons() {
+            const startBtn = document.getElementById('startBtn');
+            const stopBtn = document.getElementById('stopBtn');
+            const retryBtn = document.getElementById('retryBtn');
+            const liveTranscript = document.getElementById('liveTranscript');
+            
+            // 控制全域難度按鈕鎖定
+            document.querySelectorAll('.level-btn').forEach(btn => {
+                btn.disabled = isRecording;
+                if(isRecording) btn.classList.add('opacity-50', 'cursor-not-allowed');
+                else btn.classList.remove('opacity-50', 'cursor-not-allowed');
+            });
+
+            if (isRecording) {
+                startBtn.classList.add('hidden-safely');
+                stopBtn.classList.remove('hidden-safely');
+                retryBtn.classList.add('hidden-safely');
+                liveTranscript.classList.remove('hidden-safely');
+            } else {
+                startBtn.classList.remove('hidden-safely');
+                stopBtn.classList.add('hidden-safely');
+                liveTranscript.classList.add('hidden-safely');
+                
+                // 如果已經有文字表示有結果，顯示重試按鈕
+                if(transcriptStr.trim() !== '') {
+                    retryBtn.classList.remove('hidden-safely');
+                    startBtn.classList.add('hidden-safely'); // 隱藏開始，強迫先重試或只顯示重試
+                } else {
+                    retryBtn.classList.add('hidden-safely');
+                }
+            }
+        }
+
+        function evaluatePerformance() {
+            const finalFullText = (transcriptStr + ' ' + interimTranscriptStr).trim().toLowerCase();
+            const currentTextObj = SPEECH_TEXTS[currentLevel];
+            
+            // 單字清理器
+            const normalizeWord = (w) => w.replace(/[.,?!:;]/g, '').toLowerCase();
+            
+            // 1. 發音準確度 (Accuracy)
+            const originalDisplayWords = currentTextObj.text.split(/\s+/);
+            const tWords = originalDisplayWords.map(normalizeWord);
+            const sWords = finalFullText.split(/\s+/).map(normalizeWord);
+            
+            let correctCount = 0;
+            let sIndex = 0;
+            
+            // 寬容比對函數
+            const isWordMatch = (spoken, target) => {
+                if (!spoken || !target) return false;
+                if (spoken === target) return true;
+                
+                if ((spoken === 'twenty' || spoken === '20') && target === '20') return true;
+                
+                if (target.includes('-')) {
+                    const parts = target.split('-');
+                    if (parts.includes(spoken) || target.replace(/-/g, '') === spoken) return true;
+                }
+
+                if (spoken === 'yourself' && target === 'yourselves') return true;
+                if (spoken === 'ourself' && target === 'ourselves') return true;
+                
+                if (spoken + 's' === target || spoken === target + 's') return true;
+                if (spoken + 'd' === target || spoken === target + 'd') return true;
+                if (spoken + 'ed' === target || spoken === target + 'ed') return true;
+                if (spoken + 'ing' === target || spoken === target + 'ing') return true;
+
+                return false;
+            };
+            
+            const wordDiff = originalDisplayWords.map((origWord, index) => {
+                const cleanTarget = tWords[index];
+                let found = false;
+                for(let i=0; i < 12 && (sIndex + i) < sWords.length; i++) {
+                    if (isWordMatch(sWords[sIndex + i], cleanTarget)) {
+                        found = true;
+                        sIndex += (i + 1);
+                        break;
+                    }
+                }
+                if(found) correctCount++;
+                return { word: origWord, isCorrect: found };
+            });
+
+            const accuracyScore = Math.min(100, Math.round((correctCount / tWords.length) * 100)) || 0;
+
+            // 2. 情感與抑揚頓挫 (Emotion/Intonation)
+            let intonationScore = 0;
+            const vols = volumeHistory.filter(v => v > 0.005); 
+            
+            if (vols.length > 0) {
+                const mean = vols.reduce((a, b) => a + b, 0) / vols.length;
+                const variance = vols.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / vols.length;
+                const stdDev = Math.sqrt(variance);
+                
+                const cv = mean > 0 ? stdDev / mean : 0;
+                let calculatedScore = 40 + (cv / 0.45) * 60; 
+                intonationScore = Math.min(100, Math.max(0, Math.round(calculatedScore)));
+                
+                if (mean < 0.01) intonationScore = Math.max(0, intonationScore - 15); 
+            }
+
+            // 3. 語速 (Pacing)
+            const durationMinutes = recordingTime / 60;
+            const wpm = durationMinutes > 0 ? Math.round(sWords.length / durationMinutes) : 0;
+            let pacingScore = 0;
+            
+            if (wpm >= 110 && wpm <= 160) {
+                pacingScore = 100;
+            } else if (wpm > 160) {
+                pacingScore = Math.max(0, 100 - (wpm - 160));
+            } else {
+                pacingScore = Math.max(0, 100 - (110 - wpm) * 1.5);
+            }
+
+            // 總分計算
+            const totalScore = Math.round((accuracyScore * 0.55) + (intonationScore * 0.35) + (pacingScore * 0.10)) || 0;
+            
+            let finalGrade = 0;
+            let isSuccess = false;
+            
+            if (totalScore >= currentTextObj.targetScore) {
+                finalGrade = currentTextObj.rewardGrade;
+                isSuccess = true;
+            } else {
+                finalGrade = Math.round(totalScore * (currentTextObj.rewardGrade / 100));
+            }
+
+            renderResults({
+                wordDiff, accuracyScore, intonationScore, pacingScore, wpm, totalScore, finalGrade, isSuccess
+            });
+            updateUIButtons();
+        }
+
+        function renderResults(res) {
+            // 渲染錯字標示
+            const highlightedHTML = res.wordDiff.map(item => {
+                if(item.isCorrect) {
+                    return `<span class="text-gray-800 mr-1">${item.word}</span>`;
+                } else {
+                    return `<span class="text-red-500 font-bold bg-red-50 underline decoration-red-300 decoration-wavy mr-1" title="發音錯誤或漏字">${item.word}</span>`;
+                }
+            }).join('');
+            
+            speechContentEl.innerHTML = highlightedHTML + `
+                <div class="mt-4 pt-4 border-t border-gray-100 flex items-start gap-2 text-sm text-gray-500">
+                    <i data-lucide="alert-circle" class="w-4 h-4 flex-shrink-0 mt-0.5"></i>
+                    <p>紅色底線標示為系統無法正確辨識的單字（可能是發音不夠精準、漏字或雜音干擾）。</p>
+                </div>
+            `;
+            lucide.createIcons(); // 刷新剛塞入的 icon
+
+            // 更新結果面板數值
+            document.getElementById('defaultArea').classList.add('hidden-safely');
+            document.getElementById('resultsArea').classList.remove('hidden-safely');
+
+            const resultHeader = document.getElementById('resultHeader');
+            const resultTitle = document.getElementById('resultTitle');
+            if (res.isSuccess) {
+                resultHeader.className = 'p-6 text-center text-white bg-gradient-to-br from-green-400 to-emerald-600';
+                resultTitle.textContent = '🎉 挑戰成功！';
+            } else {
+                resultHeader.className = 'p-6 text-center text-white bg-gradient-to-br from-indigo-500 to-blue-600';
+                resultTitle.textContent = '💪 繼續加油！';
+            }
+
+            document.getElementById('finalGradeText').textContent = res.finalGrade;
+            document.getElementById('totalScoreText').textContent = res.totalScore;
+            document.getElementById('accuracyScoreText').textContent = res.accuracyScore;
+            document.getElementById('intonationScoreText').textContent = res.intonationScore;
+            document.getElementById('pacingScoreText').textContent = res.pacingScore;
+            document.getElementById('wpmText').textContent = res.wpm;
+
+            // 動態跑長條圖
+            setTimeout(() => {
+                document.getElementById('totalScoreBar').style.width = `${res.totalScore}%`;
+                document.getElementById('accuracyScoreBar').style.width = `${res.accuracyScore}%`;
+                document.getElementById('intonationScoreBar').style.width = `${res.intonationScore}%`;
+                document.getElementById('pacingScoreBar').style.width = `${res.pacingScore}%`;
+            }, 100);
+        }
+    </script>
+</body>
+</html>
