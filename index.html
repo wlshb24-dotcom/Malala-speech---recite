@@ -343,55 +343,70 @@
             animationFrame = requestAnimationFrame(drawWaveform);
         }
 
-        async function startRecording() {
-            try {
-                // 重置狀態
-                transcriptStr = '';
-                interimTranscriptStr = '';
-                volumeHistory = [];
-                recordingTime = 0;
-                document.getElementById('recordingTimeDisplay').textContent = '0:00';
-                document.getElementById('interimText').textContent = '正在聆聽中...';
-                
-                // 隱藏結果區，顯示預設區
-                document.getElementById('resultsArea').classList.add('hidden-safely');
-                document.getElementById('defaultArea').classList.remove('hidden-safely');
-                renderTargetText();
+        // 在函數外層或最上方先定義一個判斷是否為手機的常數
+const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
 
-                // 設定 Audio Context
-                if (!audioContext) {
-                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                }
-                if (audioContext.state === 'suspended') {
-                    await audioContext.resume();
-                }
+async function startRecording() {
+    try {
+        // 重置狀態
+        transcriptStr = '';
+        interimTranscriptStr = '';
+        volumeHistory = [];
+        document.getElementById('recordingTimeDisplay').textContent = '0:00';
+        document.getElementById('interimText').textContent = '正在聆聽中...';
+        
+        // 隱藏結果區，顯示預設區
+        document.getElementById('resultsArea').classList.add('hidden-safely');
+        document.getElementById('defaultArea').classList.remove('hidden-safely');
+        renderTargetText();
 
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                analyser = audioContext.createAnalyser();
-                analyser.fftSize = 2048;
-                
-                microphone = audioContext.createMediaStreamSource(stream);
-                microphone.connect(analyser);
+        // 優先步驟：啟動語音辨識（對行動裝置來說，這步驟最容易被搶佔，必須先執行）
+        recognition.start();
+        isRecording = true;
+        updateUIButtons();
+        
+        // 計時器
+        startTime = Date.now();
+        timerInterval = setInterval(() => {
+            recordingTime = Math.floor((Date.now() - startTime) / 1000);
+            document.getElementById('recordingTimeDisplay').textContent = formatTime(recordingTime);
+        }, 1000);
 
-                // 開始辨識
-                recognition.start();
-                isRecording = true;
-                updateUIButtons();
-                
-                // 計時器
-                startTime = Date.now();
-                timerInterval = setInterval(() => {
-                    recordingTime = Math.floor((Date.now() - startTime) / 1000);
-                    document.getElementById('recordingTimeDisplay').textContent = formatTime(recordingTime);
-                }, 1000);
-
-                drawWaveform();
-
-            } catch (err) {
-                console.error("Error starting recording:", err);
-                alert("無法啟動麥克風，請檢查權限設定。");
+        // 關鍵分流：如果是電腦版，才啟動 Audio Context 畫波形圖
+        if (!isMobile) {
+            if (!audioContext) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
             }
+            if (audioContext.state === 'suspended') {
+                await audioContext.resume();
+            }
+
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            analyser = audioContext.createAnalyser();
+            analyser.fftSize = 2048;
+            
+            microphone = audioContext.createMediaStreamSource(stream);
+            microphone.connect(analyser);
+
+            drawWaveform();
+        } else {
+            // 手機版：不調用 getUserMedia 避免衝突，改在畫布上畫一條靜態的音訊線
+            canvasCtx.fillStyle = 'rgb(243, 244, 246)'; 
+            canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
+            canvasCtx.lineWidth = 2;
+            canvasCtx.strokeStyle = 'rgb(156, 163, 175)'; // 靜態灰色線
+            canvasCtx.beginPath();
+            canvasCtx.moveTo(0, canvas.height / 2);
+            canvasCtx.lineTo(canvas.width, canvas.height / 2);
+            canvasCtx.stroke();
         }
+
+    } catch (err) {
+        console.error("Error starting recording:", err);
+        alert("無法啟動麥克風，請檢查權限設定。");
+        stopRecording(); // 發生錯誤時重置 UI 狀態
+    }
+}
 
         function stopRecording() {
             if (recognition) recognition.stop();
@@ -523,6 +538,10 @@
                 intonationScore = Math.min(100, Math.max(0, Math.round(calculatedScore)));
                 
                 if (mean < 0.01) intonationScore = Math.max(0, intonationScore - 15); 
+            } else if (isMobile) {
+                // 💡 幫手機版玩家補救：因為沒抓取音量，我們根據他的發音準確度，給予一個合理的模擬情感分數
+                // 這樣手機使用者才不會因為硬體限制直接拿 0 分
+                intonationScore = Math.min(100, Math.max(65, Math.round(accuracyScore * 0.95)));
             }
 
             // 3. 語速 (Pacing)
